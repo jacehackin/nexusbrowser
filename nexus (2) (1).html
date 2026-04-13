@@ -178,7 +178,8 @@
 
     <script>
         // ==========================================
-        // RENDER DEPLOYMENT URL - UPDATE THIS!!!
+        // DYNAMIC PROXY URL GENERATOR
+        // This automatically detects your Render URL!
         // ==========================================
         const PROXY_URL = window.location.origin + "/proxy?url=";
         // ==========================================
@@ -226,7 +227,6 @@
                 output.innerHTML += `\n<div style="color: #569cd6; margin-top: 5px;">> ${input}</div>`;
                 
                 try {
-                    // Try to evaluate inside the ACTIVE iframe window
                     const activeTab = getActiveTab();
                     const targetWindow = activeTab && activeTab.url !== 'about:blank' ? activeTab.iframe.contentWindow : window;
                     let result = targetWindow.eval(input);
@@ -307,7 +307,7 @@
             savedExts[extIndex].active = !savedExts[extIndex].active;
             localStorage.setItem('nexus_extensions', JSON.stringify(savedExts));
             renderExtensionsList();
-            if(getActiveTab().url !== 'about:blank') refresh(); // Reload to inject
+            if(getActiveTab().url !== 'about:blank') refresh(); 
         }
 
         function removeExtension(id) {
@@ -324,7 +324,7 @@
             const iframe = document.createElement('iframe');
             iframe.id = 'frame_' + id; iframe.className = 'browser-frame';
             iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; clipboard-write; fullscreen');
-            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-downloads');
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-downloads allow-presentation');
             document.getElementById('iframeContainer').appendChild(iframe);
 
             const tab = { id, url: initialUrl, history: [], currentIndex: -1, iframe };
@@ -365,7 +365,7 @@
             tab.url = url;
             if (!isNav) { tab.history = tab.history.slice(0, tab.currentIndex + 1); tab.history.push(url); tab.currentIndex++; }
             
-            // ROUTE THROUGH PROXY IF NOT YOUTUBE EMBED OR ABOUT:BLANK
+            // ROUTE THROUGH PROXY (Using our dynamic proxy URL)
             if (url.includes('youtube-nocookie.com/embed') || url === 'about:blank') {
                 tab.iframe.src = url;
             } else {
@@ -391,10 +391,9 @@
         window.addEventListener('keydown', (e) => { if (e.altKey && e.key.toLowerCase() === 'h') { e.preventDefault(); isAutoHideMode = !isAutoHideMode; closeAllPopups(); const w = document.getElementById('ui-wrapper'); if (isAutoHideMode) w.classList.add('auto-hidden'); else w.classList.remove('auto-hidden', 'peek'); } });
         window.addEventListener('mousemove', (e) => { if (!isAutoHideMode) return; const w = document.getElementById('ui-wrapper'); if (e.clientY <= 15) w.classList.add('peek'); else if (e.clientY > w.offsetHeight) w.classList.remove('peek'); });
 
-        // --- IFRAME INJECTION (SAME-ORIGIN FIX) ---
+        // --- IFRAME INJECTION (SAME-ORIGIN) ---
         function handleIframeLoad(tab) {
             try {
-                // This now works because the backend proxy makes everything Same-Origin
                 const frameDoc = tab.iframe.contentDocument || tab.iframe.contentWindow.document;
 
                 let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
@@ -405,7 +404,6 @@
                     }
                 });
             } catch(e) {
-                // If this fires, the target site likely blocked the proxy via Content Security Policy
                 console.warn("Proxy Injection Blocked by Target Site CSP.", e);
             }
         }
