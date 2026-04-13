@@ -1,13 +1,12 @@
 const express = require('express');
 const axios = require('axios');
 const cors = require('cors');
-const path = require('path'); // We need this to handle file paths
+const path = require('path');
 const app = express();
 
 app.use(cors());
 
-// --- 1. SERVE THE FRONTEND UI ---
-// When you visit your Render URL, it will load your browser UI
+// --- 1. SERVE THE HTML BROWSER UI ---
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'nexus.html'));
 });
@@ -28,11 +27,11 @@ app.get('/proxy', async (req, res) => {
 
         let html = response.data;
 
-        // Server-Side Ad Blocking
+        // Block basic ads before they reach you
         html = html.replace(/<script.*googlesyndication.*<\/script>/gi, "");
         html = html.replace(/<script.*doubleclick.*<\/script>/gi, "");
         
-        // Base Tag Injection (Fixes relative links)
+        // Fix relative links for images and scripts
         const headMatch = html.match(/<head[^>]*>/i);
         if (headMatch) {
             html = html.replace(headMatch[0], `${headMatch[0]}\n<base href="${targetUrl}">`);
@@ -40,7 +39,6 @@ app.get('/proxy', async (req, res) => {
 
         res.send(html);
     } catch (err) {
-        console.error("Proxy Error:", err.message);
         res.status(500).send(`Nexus Proxy Error fetching site: ${err.message}`);
     }
 });
