@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Premium Browser</title>
+    <style>
+        :root {
+            --bg-main: #f0f2f5;
+            --toolbar-bg: rgba(255, 255, 255, 0.8);
+            --accent: #1a73e8;
+            --accent-hover: #1557b0;
+            --text-main: #202124;
+            --text-sub: #5f6368;
+            --tab-inactive: #dee1e6;
+            --border: rgba(0,0,0,0.1);
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+            --radius: 12px;
+        }
+
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; background-color: var(--bg-main); overflow: hidden; color: var(--text-main); }
+        
+        #ui-wrapper { position: relative; width: 100%; z-index: 999; background-color: var(--bg-main); transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #ui-wrapper.auto-hidden { position: absolute; top: 0; left: 0; transform: translateY(-100%); box-shadow: 0 10px 30px rgba(0,0,0,0.15); }
+        #ui-wrapper.auto-hidden.peek { transform: translateY(0); }
+
+        .browser-tabs-bar { display: flex; background-color: #dee1e6; padding: 10px 10px 0 10px; gap: 5px; align-items: flex-end; }
+        .browser-tab { display: flex; align-items: center; justify-content: space-between; background-color: rgba(255, 255, 255, 0.5); padding: 10px 16px; border-radius: 10px 10px 0 0; min-width: 140px; max-width: 220px; cursor: pointer; font-size: 13px; transition: all 0.2s ease; border: 1px solid transparent; border-bottom: none; }
+        .browser-tab:hover { background-color: rgba(255, 255, 255, 0.8); }
+        .browser-tab.active { background-color: #ffffff; font-weight: 600; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+        .close-tab-btn { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-sub); margin-left: 10px; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .close-tab-btn:hover { background-color: rgba(0,0,0,0.1); color: #d93025; }
+        .new-tab-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: var(--text-sub); padding: 0 12px; margin-bottom: 5px; transition: 0.2s; }
+        .new-tab-btn:hover { transform: scale(1.2); color: var(--accent); }
+
+        .toolbar { display: flex; padding: 12px 20px; background: var(--toolbar-bg); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); align-items: center; gap: 12px; transition: transform 0.3s ease, opacity 0.3s ease; }
+        .toolbar.hidden { display: none; }
+        .nav-group { display: flex; gap: 4px; }
+        .tool-btn { padding: 8px 12px; background: transparent; color: var(--text-sub); border: none; border-radius: 8px; font-size: 18px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; }
+        .tool-btn:hover:not(:disabled) { background: rgba(0,0,0,0.05); color: var(--text-main); }
+        .tool-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .url-bar-container { flex-grow: 1; position: relative; display: flex; align-items: center; }
+        .url-input { width: 100%; padding: 10px 20px; border: 1px solid var(--border); border-radius: 20px; font-size: 14px; background: #f1f3f4; transition: all 0.2s; outline: none; }
+        .url-input:focus { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2); }
+
+        .bookmarks-bar { display: flex; gap: 10px; padding: 8px 20px; background: #fff; border-bottom: 1px solid var(--border); font-size: 12px; overflow-x: auto; white-space: nowrap; }
+        .bookmark-pill { display: flex; align-items: center; background: var(--bg-main); padding: 4px 12px; border-radius: 15px; gap: 6px; transition: 0.2s; border: 1px solid transparent; }
+        .bookmark-pill:hover { border-color: var(--accent); background: #fff; }
+        .bookmark-item { color: var(--text-main); text-decoration: none; cursor: pointer; }
+        .del-bookmark { cursor: pointer; color: var(--text-sub); font-size: 14px; border: none; background: none; }
+        .del-bookmark:hover { color: #d93025; }
+
+        .main-container { display: flex; flex-grow: 1; position: relative; background: #fff; }
+        .iframe-container { flex-grow: 1; position: relative; }
+        .browser-frame { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; display: none; background: white; }
+        .browser-frame.active { display: block; }
+
+        .popup-modal { display: none; position: absolute; top: 70px; right: 20px; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px; z-index: 1000; width: 300px; border: 1px solid var(--border); animation: fadeIn 0.2s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .settings-header { font-weight: bold; margin-bottom: 15px; font-size: 16px; color: var(--accent); }
+        .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 14px; }
+        #ytConverterModal { width: 380px; right: 80px; }
+        .premium-btn { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; transition: 0.2s; margin-bottom: 10px;}
+        .premium-btn:hover { background: var(--accent-hover); }
+        .danger-btn { background: #d93025; }
+        .danger-btn:hover { background: #b3261e; }
+        .ext-item { padding: 10px; background: #f8f9fa; border: 1px solid #e8eaed; border-radius: 8px; margin-bottom: 8px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+
+        /* INSPECTOR PANEL */
+        #inspectorPanel { width: 100%; height: 40%; position: absolute; bottom: 0; left: 0; background: #1e1e1e; color: #d4d4d4; display: none; flex-direction: column; border-top: 2px solid #333; font-family: 'Consolas', monospace; z-index: 99998; box-shadow: 0 -5px 20px rgba(0,0,0,0.3); }
+        .inspector-tabs { display: flex; background: #252526; justify-content: space-between;}
+        .tabs-left { display: flex; }
+        .insp-tab { padding: 10px 15px; cursor: pointer; border: none; background: none; color: #969696; font-size: 12px; }
+        .insp-tab.active { color: #fff; border-bottom: 2px solid var(--accent); background: #1e1e1e; }
+        .insp-close { padding: 10px 15px; cursor: pointer; border: none; background: none; color: #d93025; font-size: 16px; font-weight: bold;}
+        .insp-close:hover { color: #ff4d4d; }
+        .insp-view { display: none; flex-direction: column; flex-grow: 1; height: 100%; overflow: hidden; }
+        .insp-view.active { display: flex; }
+        #consoleOutput { padding: 10px; overflow-y: auto; flex-grow: 1; font-size: 12px; }
+        .console-controls { display: flex; justify-content: flex-end; background: #2d2d2d; padding: 4px 10px; border-bottom: 1px solid #333; }
+        .dev-btn { background: #333; border: 1px solid #555; color: #ccc; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; transition: 0.2s; }
+        .dev-btn:hover { background: #444; color: white; border-color: #888; }
+        .network-controls { display: flex; background: #2d2d2d; padding: 8px 10px; gap: 10px; align-items: center; border-bottom: 1px solid #333; }
+        .network-input { background: #111; color: #fff; border: 1px solid #444; padding: 4px 8px; font-size: 12px; border-radius: 4px; outline: none; }
+        .network-input:focus { border-color: var(--accent); }
+        #networkOutput { flex-grow: 1; overflow-y: auto; padding: 0; font-size: 11px; }
+        .net-row { display: flex; padding: 6px 10px; border-bottom: 1px solid #333; align-items: center; }
+        .net-row:hover { background: #2a2a2a; }
+        .net-header { font-weight: bold; background: #222; border-bottom: 1px solid #444; }
+        .col-name { flex: 4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 10px;}
+        .col-type { flex: 1; color: #e5b567; }
+        .col-time { flex: 1; text-align: right; color: #9cdcfe; }
+    </style>
+</head>
+<body onclick="closeAllPopups(event)">
+
+    <div id="ui-wrapper">
+        <div class="browser-tabs-bar" id="browserTabsBar">
+            <button class="new-tab-btn" onclick="createNewTab()">+</button>
+        </div>
+
+        <div class="toolbar" id="mainToolbar">
+            <div class="nav-group">
+                <button class="tool-btn" id="backBtn" onclick="goBack()" disabled>&#10094;</button>
+                <button class="tool-btn" id="fwdBtn" onclick="goForward()" disabled>&#10095;</button>
+                <button class="tool-btn" onclick="refresh()">&#10227;</button>
+            </div>
+            <div class="url-bar-container">
+                <input type="text" id="urlInput" class="url-input" placeholder="Search or enter URL (Press Alt + H to Toggle Auto-Hide Mode)" onkeypress="handleUrlKeyPress(event)">
+            </div>
+            <button class="tool-btn toggle-trigger" onclick="toggleExtensions(event)" title="Extensions">🧩</button>
+            <button class="tool-btn toggle-trigger" onclick="toggleYTConverter(event)" style="color: #ff0000;" title="YouTube Tools">▶</button>
+            <button class="tool-btn toggle-trigger" onclick="toggleInspector(event)" title="Dev Tools">🔍</button>
+            <button class="tool-btn" onclick="addBookmark()" title="Bookmark">★</button>
+            <button class="tool-btn toggle-trigger" onclick="toggleSettings(event)" title="Settings">⚙️</button>
+        </div>
+
+        <div class="bookmarks-bar" id="bookmarksBar"></div>
+    </div>
+
+    <div class="main-container">
+        <div class="iframe-container" id="iframeContainer"></div>
+        
+        <div id="inspectorPanel" onclick="event.stopPropagation()">
+            <div class="inspector-tabs">
+                <div class="tabs-left">
+                    <button class="insp-tab active" id="btnConsole" onclick="switchDevTab('console')">Console</button>
+                    <button class="insp-tab" id="btnNetwork" onclick="switchDevTab('network')">Network</button>
+                </div>
+                <button class="insp-close" onclick="document.getElementById('inspectorPanel').style.display='none'">×</button>
+            </div>
+
+            <div id="viewConsole" class="insp-view active">
+                <div class="console-controls">
+                    <button class="dev-btn" onclick="clearConsole()">🚫 Clear Console</button>
+                </div>
+                <div id="consoleOutput" style="white-space: pre-wrap;">Nexus Proxy Console Initialized...</div>
+                <div style="padding: 10px; background: #1e1e1e; border-top: 1px solid #333;">
+                    <input type="text" id="consoleInput" style="width:100%; background:#111; color:white; border:1px solid #444; padding:8px; font-family: monospace; outline: none; border-radius: 4px;" placeholder="Execute JS in active tab (Press Enter)..." onkeydown="handleConsoleCommand(event)">
+                </div>
+            </div>
+
+            <div id="viewNetwork" class="insp-view">
+                <div class="network-controls">
+                    <input type="text" class="network-input" id="netSearch" placeholder="Filter requests..." onkeyup="renderNetwork()" style="flex-grow: 1;">
+                    <button class="dev-btn" onclick="renderNetwork()">🔄 Refresh Logs</button>
+                </div>
+                <div class="net-row net-header">
+                    <div class="col-name">Name / URL</div>
+                    <div class="col-type">Type</div>
+                    <div class="col-time">Time (ms)</div>
+                </div>
+                <div id="networkOutput"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="extensionsModal" class="popup-modal" onclick="event.stopPropagation()">
+        <div class="settings-header">🧩 Extensions Manager</div>
+        <p style="font-size: 12px; color: var(--text-sub); margin-top: 0;">Select an unpacked folder containing .js or .css files to run them.</p>
+        <button class="premium-btn" onclick="document.getElementById('extFolderInput').click()">Load Folder</button>
+        <input type="file" id="extFolderInput" webkitdirectory directory multiple style="display: none;" onchange="loadUnpackedExtension(event)">
+        <div id="loadedExtsList" style="margin-top: 15px; margin-bottom: 15px; max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px;"></div>
+        <button class="premium-btn danger-btn" onclick="clearExtensions()" style="margin-bottom: 0;">Clear All Extensions</button>
+    </div>
+
+    <div id="settingsModal" class="popup-modal" onclick="event.stopPropagation()">
+        <div class="settings-header">Nexus Settings</div>
+        <div class="setting-row"><label>Hide URL Bar Menu</label><input type="checkbox" id="hideToolbarToggle" onchange="toggleToolbar()"></div>
+    </div>
+
+    <div id="ytConverterModal" class="popup-modal" onclick="event.stopPropagation()">
+        <div class="settings-header">YouTube Link / Iframe Extractor</div>
+        <textarea id="ytInput" class="url-input" style="width: 100%; height: 100px; box-sizing: border-box; margin-bottom: 15px; border-radius: 8px; resize: none; background: #fff;" placeholder="Paste YT Link or <iframe> code from Classroom..."></textarea>
+        <button class="premium-btn" onclick="convertAndOpenYT()">Launch Video</button>
+        <div id="ytError" style="color: #d93025; font-size: 12px; margin-top: 10px; display: none; text-align: center;">Invalid Video Source</div>
+    </div>
+
+    <script>
+        // ==========================================
+        // RENDER DEPLOYMENT URL - UPDATE THIS!!!
+        // ==========================================
+        const PROXY_URL = window.location.origin + "/proxy?url=";
+        // ==========================================
+
+        let appTabs = [];
+        let activeTabId = null;
+        let tabCounter = 0;
+        let bookmarks = JSON.parse(localStorage.getItem('proxyBookmarks')) || [];
+
+        const settingsModal = document.getElementById('settingsModal');
+        const ytConverterModal = document.getElementById('ytConverterModal');
+        const inspectorPanel = document.getElementById('inspectorPanel');
+        const extensionsModal = document.getElementById('extensionsModal');
+        const mainToolbar = document.getElementById('mainToolbar');
+
+        renderBookmarks();
+        renderExtensionsList();
+        createNewTab('about:blank');
+
+        function closeAllPopups(e) {
+            if (e && e.target.closest('.toggle-trigger')) return;
+            settingsModal.style.display = 'none'; ytConverterModal.style.display = 'none'; extensionsModal.style.display = 'none';
+        }
+
+        function toggleSettings(e) { e.stopPropagation(); const show = settingsModal.style.display !== 'block'; closeAllPopups(); settingsModal.style.display = show ? 'block' : 'none'; }
+        function toggleYTConverter(e) { e.stopPropagation(); const show = ytConverterModal.style.display !== 'block'; closeAllPopups(); ytConverterModal.style.display = show ? 'block' : 'none'; }
+        function toggleInspector(e) { e.stopPropagation(); const show = inspectorPanel.style.display !== 'flex'; closeAllPopups(); inspectorPanel.style.display = show ? 'flex' : 'none'; if(show) switchDevTab('console'); }
+        function toggleExtensions(e) { e.stopPropagation(); const show = extensionsModal.style.display !== 'block'; closeAllPopups(); extensionsModal.style.display = show ? 'block' : 'none'; }
+        function toggleToolbar() { mainToolbar.classList.toggle('hidden'); document.getElementById('hideToolbarToggle').checked = mainToolbar.classList.contains('hidden'); }
+
+        // --- DEV TOOLS: TABS & CONSOLE ---
+        function switchDevTab(tabName) {
+            document.querySelectorAll('.insp-tab').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.insp-view').forEach(view => view.classList.remove('active'));
+            document.getElementById('btn' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+            document.getElementById('view' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).classList.add('active');
+            if(tabName === 'network') renderNetwork();
+        }
+
+        function handleConsoleCommand(e) {
+            if (e.key === 'Enter') {
+                const input = e.target.value;
+                if (!input.trim()) return;
+                const output = document.getElementById('consoleOutput');
+                output.innerHTML += `\n<div style="color: #569cd6; margin-top: 5px;">> ${input}</div>`;
+                
+                try {
+                    // Try to evaluate inside the ACTIVE iframe window
+                    const activeTab = getActiveTab();
+                    const targetWindow = activeTab && activeTab.url !== 'about:blank' ? activeTab.iframe.contentWindow : window;
+                    let result = targetWindow.eval(input);
+                    if (typeof result === 'object' && result !== null) result = JSON.stringify(result);
+                    output.innerHTML += `\n<div style="color: #4ec9b0;"><- ${result !== undefined ? result : 'undefined'}</div>`;
+                } catch (err) {
+                    output.innerHTML += `\n<div style="color: #f48771;">${err}</div>`;
+                }
+                
+                e.target.value = '';
+                output.scrollTop = output.scrollHeight;
+            }
+        }
+        function clearConsole() { document.getElementById('consoleOutput').innerHTML = '<i>Console cleared.</i>'; }
+
+        // --- DEV TOOLS: NETWORK ---
+        let networkLog = [];
+        if (window.PerformanceObserver) {
+            const observer = new PerformanceObserver((list) => {
+                networkLog.push(...list.getEntries());
+                if (document.getElementById('viewNetwork').classList.contains('active')) renderNetwork();
+            });
+            observer.observe({ entryTypes: ['resource', 'navigation', 'fetch'] });
+        }
+
+        function renderNetwork() {
+            networkLog = performance.getEntriesByType('resource'); 
+            const out = document.getElementById('networkOutput');
+            const term = document.getElementById('netSearch').value.toLowerCase();
+            let filtered = networkLog.filter(r => r.name.toLowerCase().includes(term));
+            
+            out.innerHTML = '';
+            if (filtered.length === 0) return out.innerHTML = '<div style="padding: 10px; color:#666; text-align:center;">No requests found.</div>';
+
+            filtered.forEach(r => {
+                let shortName = r.name.split('/').pop() || r.name;
+                if(shortName.includes('?')) shortName = shortName.split('?')[0]; 
+                if(shortName.length > 60) shortName = shortName.substring(0, 57) + '...';
+                out.innerHTML += `<div class="net-row"><div class="col-name" title="${r.name}">${shortName}</div><div class="col-type">${r.initiatorType || 'other'}</div><div class="col-time">${Math.round(r.duration)}</div></div>`;
+            });
+        }
+
+        // --- EXTENSIONS ---
+        async function loadUnpackedExtension(e) {
+            const files = e.target.files;
+            if (!files.length) return;
+            let extCode = { css: '', js: '' };
+            let extName = files[0].webkitRelativePath.split('/')[0] || "Custom Extension";
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (file.name.endsWith('manifest.json')) { try { const manifest = JSON.parse(await file.text()); if (manifest.name) extName = manifest.name; } catch(err) {} } 
+                else if (file.name.endsWith('.css')) extCode.css += await file.text() + '\n';
+                else if (file.name.endsWith('.js')) extCode.js += await file.text() + '\n';
+            }
+
+            let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
+            savedExts.push({ id: Date.now().toString(), name: extName, code: extCode, active: false });
+            localStorage.setItem('nexus_extensions', JSON.stringify(savedExts));
+            document.getElementById('extFolderInput').value = '';
+            renderExtensionsList(); 
+        }
+
+        function renderExtensionsList() {
+            let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
+            const list = document.getElementById('loadedExtsList');
+            list.innerHTML = savedExts.length === 0 ? '<div style="font-size: 12px; color: #888; text-align: center;">No extensions loaded.</div>' : '';
+            savedExts.forEach(ext => {
+                const isRun = ext.active;
+                list.innerHTML += `<div class="ext-item"><span style="font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px;" title="${ext.name}">📦 ${ext.name}</span><div style="display: flex; gap: 5px;"><button style="background: ${isRun ? "#8b949e" : "#238636"}; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 6px 10px;" onclick="toggleExtension('${ext.id}')">${isRun ? "⏹️ Stop" : "▶️ Run"}</button><button style="background: #da3633; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; padding: 6px 10px;" onclick="removeExtension('${ext.id}')">🗑️</button></div></div>`;
+            });
+        }
+
+        function toggleExtension(id) {
+            let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
+            const extIndex = savedExts.findIndex(e => e.id === id);
+            if (extIndex === -1) return;
+            savedExts[extIndex].active = !savedExts[extIndex].active;
+            localStorage.setItem('nexus_extensions', JSON.stringify(savedExts));
+            renderExtensionsList();
+            if(getActiveTab().url !== 'about:blank') refresh(); // Reload to inject
+        }
+
+        function removeExtension(id) {
+            let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
+            const extIndex = savedExts.findIndex(e => e.id === id);
+            if (extIndex !== -1) { savedExts.splice(extIndex, 1); localStorage.setItem('nexus_extensions', JSON.stringify(savedExts)); renderExtensionsList(); }
+        }
+
+        function clearExtensions() { if (confirm("Remove all extensions?")) { localStorage.removeItem('nexus_extensions'); renderExtensionsList(); } }
+
+        // --- TABS & NAVIGATION ---
+        function createNewTab(initialUrl = 'about:blank') {
+            const id = 'tab_' + (++tabCounter);
+            const iframe = document.createElement('iframe');
+            iframe.id = 'frame_' + id; iframe.className = 'browser-frame';
+            iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture; clipboard-write; fullscreen');
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-downloads');
+            document.getElementById('iframeContainer').appendChild(iframe);
+
+            const tab = { id, url: initialUrl, history: [], currentIndex: -1, iframe };
+            appTabs.push(tab);
+
+            const btn = document.createElement('div'); btn.className = 'browser-tab'; btn.id = 'ui_' + id;
+            btn.innerHTML = `<span class="tab-title">New Tab</span><button class="close-tab-btn" onclick="closeTab('${id}', event)">×</button>`;
+            btn.onclick = () => switchAppTab(id);
+            document.getElementById('browserTabsBar').insertBefore(btn, document.querySelector('.new-tab-btn'));
+
+            iframe.onload = () => handleIframeLoad(tab);
+            switchAppTab(id);
+            if(initialUrl !== 'about:blank') loadUrl(initialUrl);
+        }
+
+        function switchAppTab(id) {
+            activeTabId = id;
+            appTabs.forEach(t => { t.iframe.classList.toggle('active', t.id === id); document.getElementById('ui_' + t.id).classList.toggle('active', t.id === id); });
+            const active = getActiveTab();
+            document.getElementById('urlInput').value = active.url !== 'about:blank' ? active.url : '';
+            updateNavButtons();
+        }
+
+        function closeTab(id, e) {
+            e.stopPropagation(); if (appTabs.length === 1) return;
+            document.getElementById('ui_' + id).remove(); document.getElementById('frame_' + id).remove();
+            const idx = appTabs.findIndex(t => t.id === id); appTabs.splice(idx, 1);
+            if (activeTabId === id) switchAppTab((appTabs[idx] || appTabs[idx - 1]).id);
+        }
+
+        function getActiveTab() { return appTabs.find(t => t.id === activeTabId); }
+
+        function loadUrl(urlToLoad = null, isNav = false) {
+            const tab = getActiveTab();
+            let url = urlToLoad || document.getElementById('urlInput').value.trim();
+            if (!url) return;
+            if (!url.startsWith('http') && !url.startsWith('about:')) url = 'https://' + url;
+            tab.url = url;
+            if (!isNav) { tab.history = tab.history.slice(0, tab.currentIndex + 1); tab.history.push(url); tab.currentIndex++; }
+            
+            // ROUTE THROUGH PROXY IF NOT YOUTUBE EMBED OR ABOUT:BLANK
+            if (url.includes('youtube-nocookie.com/embed') || url === 'about:blank') {
+                tab.iframe.src = url;
+            } else {
+                tab.iframe.src = PROXY_URL + encodeURIComponent(url);
+            }
+            
+            document.querySelector(`#ui_${tab.id} .tab-title`).textContent = url.split('//')[1]?.split('/')[0] || url;
+            updateNavButtons();
+        }
+
+        function handleUrlKeyPress(e) { if (e.key === 'Enter') loadUrl(); }
+        function goBack() { const t = getActiveTab(); if (t.currentIndex > 0) { t.currentIndex--; loadUrl(t.history[t.currentIndex], true); } }
+        function goForward() { const t = getActiveTab(); if (t.currentIndex < t.history.length - 1) { t.currentIndex++; loadUrl(t.history[t.currentIndex], true); } }
+        function refresh() { loadUrl(getActiveTab().url, true); }
+        function updateNavButtons() { const t = getActiveTab(); document.getElementById('backBtn').disabled = t.currentIndex <= 0; document.getElementById('fwdBtn').disabled = t.currentIndex >= t.history.length - 1; }
+
+        // --- BOOKMARKS & AUTO-HIDE ---
+        function addBookmark() { const url = document.getElementById('urlInput').value.trim(); if (url && !bookmarks.includes(url)) { bookmarks.push(url); localStorage.setItem('proxyBookmarks', JSON.stringify(bookmarks)); renderBookmarks(); } }
+        function deleteBookmark(idx, e) { e.stopPropagation(); bookmarks.splice(idx, 1); localStorage.setItem('proxyBookmarks', JSON.stringify(bookmarks)); renderBookmarks(); }
+        function renderBookmarks() { const bar = document.getElementById('bookmarksBar'); bar.innerHTML = ''; bookmarks.forEach((url, i) => { const div = document.createElement('div'); div.className = 'bookmark-pill'; div.innerHTML = `<span class="bookmark-item" onclick="loadUrl('${url}')">${url.split('//')[1]?.split('/')[0] || url}</span><button class="del-bookmark" onclick="deleteBookmark(${i}, event)">×</button>`; bar.appendChild(div); }); }
+
+        let isAutoHideMode = false;
+        window.addEventListener('keydown', (e) => { if (e.altKey && e.key.toLowerCase() === 'h') { e.preventDefault(); isAutoHideMode = !isAutoHideMode; closeAllPopups(); const w = document.getElementById('ui-wrapper'); if (isAutoHideMode) w.classList.add('auto-hidden'); else w.classList.remove('auto-hidden', 'peek'); } });
+        window.addEventListener('mousemove', (e) => { if (!isAutoHideMode) return; const w = document.getElementById('ui-wrapper'); if (e.clientY <= 15) w.classList.add('peek'); else if (e.clientY > w.offsetHeight) w.classList.remove('peek'); });
+
+        // --- IFRAME INJECTION (SAME-ORIGIN FIX) ---
+        function handleIframeLoad(tab) {
+            try {
+                // This now works because the backend proxy makes everything Same-Origin
+                const frameDoc = tab.iframe.contentDocument || tab.iframe.contentWindow.document;
+
+                let savedExts = JSON.parse(localStorage.getItem('nexus_extensions') || '[]');
+                savedExts.forEach(ext => {
+                    if (ext.active) {
+                        if (ext.code.css) { const style = frameDoc.createElement('style'); style.textContent = ext.code.css; frameDoc.head.appendChild(style); }
+                        if (ext.code.js) { const script = frameDoc.createElement('script'); script.textContent = ext.code.js; frameDoc.body.appendChild(script); }
+                    }
+                });
+            } catch(e) {
+                // If this fires, the target site likely blocked the proxy via Content Security Policy
+                console.warn("Proxy Injection Blocked by Target Site CSP.", e);
+            }
+        }
+    </script>
+</body>
+</html>
