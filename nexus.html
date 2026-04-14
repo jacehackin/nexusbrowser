@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus Premium Browser</title>
+    <style>
+        :root {
+            --bg-main: #f0f2f5;
+            --toolbar-bg: rgba(255, 255, 255, 0.9);
+            --accent: #1a73e8;
+            --accent-hover: #1557b0;
+            --text-main: #202124;
+            --text-sub: #5f6368;
+            --border: rgba(0,0,0,0.1);
+            --shadow: 0 4px 20px rgba(0,0,0,0.15);
+            --radius: 12px;
+        }
+
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; background-color: var(--bg-main); overflow: hidden; color: var(--text-main); }
+        
+        #ui-wrapper { position: relative; width: 100%; z-index: 1000; background-color: var(--bg-main); transition: transform 0.3s ease; }
+        #ui-wrapper.auto-hidden { position: absolute; top: 0; left: 0; transform: translateY(-100%); }
+        #ui-wrapper.auto-hidden.peek { transform: translateY(0); box-shadow: var(--shadow); }
+
+        .browser-tabs-bar { display: flex; background-color: #dee1e6; padding: 8px 10px 0; gap: 4px; align-items: flex-end; }
+        .browser-tab { display: flex; align-items: center; background: rgba(255,255,255,0.5); padding: 8px 12px; border-radius: 8px 8px 0 0; min-width: 120px; max-width: 200px; cursor: pointer; font-size: 12px; border: 1px solid transparent; border-bottom: none; }
+        .browser-tab.active { background: #fff; font-weight: 600; }
+        .close-tab-btn { margin-left: auto; border: none; background: none; cursor: pointer; color: var(--text-sub); border-radius: 50%; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+        .close-tab-btn:hover { background: #ff4d4d; color: white; }
+
+        .toolbar { display: flex; padding: 10px 15px; background: var(--toolbar-bg); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); align-items: center; gap: 10px; }
+        .nav-group { display: flex; gap: 2px; }
+        .tool-btn { padding: 8px; background: transparent; border: none; border-radius: 50%; font-size: 18px; cursor: pointer; color: var(--text-sub); display: flex; align-items: center; }
+        .tool-btn:hover { background: rgba(0,0,0,0.05); color: var(--text-main); }
+        
+        .url-bar-container { flex-grow: 1; display: flex; }
+        .url-input { width: 100%; padding: 8px 18px; border: 1px solid var(--border); border-radius: 20px; font-size: 13px; background: #f1f3f4; outline: none; }
+        .url-input:focus { background: #fff; border-color: var(--accent); }
+
+        .bookmarks-bar { display: flex; gap: 8px; padding: 6px 15px; background: #fff; border-bottom: 1px solid var(--border); overflow-x: auto; }
+        .bookmark-pill { padding: 4px 10px; background: var(--bg-main); border-radius: 12px; font-size: 11px; cursor: pointer; white-space: nowrap; border: 1px solid transparent; }
+        .bookmark-pill:hover { border-color: var(--accent); }
+
+        .main-container { display: flex; flex-grow: 1; position: relative; overflow: hidden; }
+        .iframe-container { flex-grow: 1; position: relative; background: #fff; }
+        .browser-frame { position: absolute; width: 100%; height: 100%; border: none; display: none; }
+        .browser-frame.active { display: block; }
+
+        /* MODALS (Fixed Overlap) */
+        .popup-modal { display: none; position: absolute; top: 60px; right: 20px; background: #fff; border-radius: var(--radius); shadow: var(--shadow); padding: 15px; z-index: 2000; width: 280px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+        .settings-header { font-weight: bold; margin-bottom: 12px; font-size: 14px; color: var(--accent); }
+        .premium-btn { width: 100%; padding: 10px; background: var(--accent); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; margin-bottom: 8px; }
+
+        /* DEV TOOLS (Fixed Console) */
+        #inspectorPanel { width: 100%; height: 35%; position: absolute; bottom: 0; background: #181818; color: #fff; display: none; flex-direction: column; z-index: 3000; border-top: 2px solid #333; }
+        .insp-tabs { display: flex; background: #252526; border-bottom: 1px solid #333; }
+        .insp-tab { padding: 8px 15px; font-size: 12px; cursor: pointer; color: #aaa; background: none; border: none; }
+        .insp-tab.active { color: #fff; background: #181818; }
+        #consoleOutput { flex-grow: 1; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 12px; }
+        .console-input-area { padding: 8px; background: #181818; border-top: 1px solid #333; }
+        #consoleInput { width: 100%; background: #222; border: 1px solid #444; color: #4ec9b0; padding: 6px; outline: none; font-family: monospace; }
+    </style>
+</head>
+<body onclick="closeAllPopups(event)">
+
+    <div id="ui-wrapper">
+        <div class="browser-tabs-bar" id="browserTabsBar">
+            <button class="tool-btn" onclick="createNewTab()" style="font-size: 24px; margin-bottom: 4px;">+</button>
+        </div>
+
+        <div class="toolbar">
+            <div class="nav-group">
+                <button class="tool-btn" id="backBtn" onclick="goBack()">&#10094;</button>
+                <button class="tool-btn" id="fwdBtn" onclick="goForward()">&#10095;</button>
+                <button class="tool-btn" onclick="refresh()">&#10227;</button>
+            </div>
+            <div class="url-bar-container">
+                <input type="text" id="urlInput" class="url-input" placeholder="Search or type a URL..." onkeypress="if(event.key==='Enter') loadUrl()">
+            </div>
+            <button class="tool-btn toggle-trigger" onclick="toggleInspector(event)">🔍</button>
+            <button class="tool-btn toggle-trigger" onclick="toggleSettings(event)">⚙️</button>
+        </div>
+        <div class="bookmarks-bar" id="bookmarksBar"></div>
+    </div>
+
+    <div class="main-container">
+        <div class="iframe-container" id="iframeContainer"></div>
+        
+        <div id="inspectorPanel" onclick="event.stopPropagation()">
+            <div class="insp-tabs">
+                <button class="insp-tab active">Console</button>
+                <button class="insp-tab" onclick="document.getElementById('inspectorPanel').style.display='none'" style="margin-left: auto; color: #ff4d4d;">Close</button>
+            </div>
+            <div id="consoleOutput"></div>
+            <div class="console-input-area">
+                <input type="text" id="consoleInput" placeholder="> Run JavaScript..." onkeypress="if(event.key==='Enter') execConsole()">
+            </div>
+        </div>
+    </div>
+
+    <div id="settingsModal" class="popup-modal" onclick="event.stopPropagation()">
+        <div class="settings-header">Nexus Browser Settings</div>
+        <button class="premium-btn" onclick="addBookmark()">Add current to Bookmarks</button>
+        <button class="premium-btn" style="background: #d93025;" onclick="localStorage.removeItem('proxyBookmarks'); location.reload();">Clear All Data</button>
+        <p style="font-size: 11px; color: #666; text-align: center;">Alt + H to Toggle Auto-Hide UI</p>
+    </div>
+
+    <script>
+        const PROXY_URL = window.location.origin + "/proxy?url=";
+        let appTabs = [];
+        let activeTabId = null;
+        let tabCounter = 0;
+
+        function toggleSettings(e) { e.stopPropagation(); const s = document.getElementById('settingsModal'); s.style.display = s.style.display === 'block' ? 'none' : 'block'; }
+        function toggleInspector(e) { e.stopPropagation(); const i = document.getElementById('inspectorPanel'); i.style.display = i.style.display === 'flex' ? 'none' : 'flex'; }
+        function closeAllPopups() { document.getElementById('settingsModal').style.display = 'none'; }
+
+        function createNewTab(url = 'about:blank') {
+            const id = 'tab_' + (++tabCounter);
+            const iframe = document.createElement('iframe');
+            iframe.id = 'frame_' + id;
+            iframe.className = 'browser-frame';
+            iframe.setAttribute('allow', 'autoplay; fullscreen; clipboard-write');
+            iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms allow-downloads');
+            document.getElementById('iframeContainer').appendChild(iframe);
+
+            const tab = { id, url, history: [url], currentIndex: 0, iframe };
+            appTabs.push(tab);
+
+            const btn = document.createElement('div');
+            btn.className = 'browser-tab';
+            btn.id = 'ui_' + id;
+            btn.innerHTML = `<span class="t-title">New Tab</span><button class="close-tab-btn" onclick="closeTab('${id}', event)">×</button>`;
+            btn.onclick = () => switchTab(id);
+            document.getElementById('browserTabsBar').appendChild(btn);
+
+            iframe.onload = () => handleLoad(tab);
+            switchTab(id);
+            if(url !== 'about:blank') loadUrl(url);
+        }
+
+        function switchTab(id) {
+            activeTabId = id;
+            appTabs.forEach(t => {
+                t.iframe.classList.toggle('active', t.id === id);
+                document.getElementById('ui_' + t.id).classList.toggle('active', t.id === id);
+            });
+            const active = getActiveTab();
+            document.getElementById('urlInput').value = active.url === 'about:blank' ? '' : active.url;
+        }
+
+        function getActiveTab() { return appTabs.find(t => t.id === activeTabId); }
+
+        function loadUrl(customUrl = null) {
+            const tab = getActiveTab();
+            let url = customUrl || document.getElementById('urlInput').value.trim();
+            if (!url.startsWith('http')) url = 'https://' + url;
+            
+            tab.url = url;
+            tab.iframe.src = PROXY_URL + encodeURIComponent(url);
+            document.querySelector(`#ui_${tab.id} .t-title`).textContent = url.split('//')[1]?.split('/')[0] || url;
+        }
+
+        function handleLoad(tab) {
+            try {
+                const win = tab.iframe.contentWindow;
+                const doc = tab.iframe.contentDocument;
+
+                // --- 1. REAL CONSOLE INTERCEPTION ---
+                const oldLog = win.console.log;
+                win.console.log = function(...args) {
+                    const out = document.getElementById('consoleOutput');
+                    out.innerHTML += `<div style="color: #ccc; border-bottom: 1px solid #222; padding: 2px;">[Tab] ${args.join(' ')}</div>`;
+                    out.scrollTop = out.scrollHeight;
+                    oldLog.apply(win.console, args);
+                };
+
+                // --- 2. STRICT AD BLOCKING (CSS) ---
+                const style = doc.createElement('style');
+                style.textContent = `
+                    iframe[src*="google"], iframe[src*="doubleclick"], 
+                    .ad, .ads, .adsbygoogle, #ad-container, [id*="google_ads"] { 
+                        display: none !important; pointer-events: none !important; visibility: hidden !important; 
+                    }
+                `;
+                doc.head.appendChild(style);
+            } catch(e) {
+                console.warn("Security: Cannot inject console into this site.");
+            }
+        }
+
+        function execConsole() {
+            const input = document.getElementById('consoleInput');
+            const code = input.value;
+            const tab = getActiveTab();
+            try {
+                const result = tab.iframe.contentWindow.eval(code);
+                document.getElementById('consoleOutput').innerHTML += `<div style="color: #4ec9b0;">> ${result}</div>`;
+            } catch(err) {
+                document.getElementById('consoleOutput').innerHTML += `<div style="color: #f48771;">Error: ${err.message}</div>`;
+            }
+            input.value = '';
+        }
+
+        // NAVIGATION HELPERS
+        function goBack() { const t = getActiveTab(); t.iframe.contentWindow.history.back(); }
+        function goForward() { const t = getActiveTab(); t.iframe.contentWindow.history.forward(); }
+        function refresh() { loadUrl(getActiveTab().url); }
+
+        // AUTO-HIDE
+        let isHide = false;
+        window.onkeydown = (e) => {
+            if(e.altKey && e.key.toLowerCase() === 'h') {
+                isHide = !isHide;
+                document.getElementById('ui-wrapper').classList.toggle('auto-hidden', isHide);
+            }
+        };
+        window.onmousemove = (e) => {
+            if(isHide && e.clientY < 50) document.getElementById('ui-wrapper').classList.add('peek');
+            else document.getElementById('ui-wrapper').classList.remove('peek');
+        };
+
+        createNewTab();
+    </script>
+</body>
+</html>
